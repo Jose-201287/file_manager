@@ -1,0 +1,31 @@
+/*No se usa mediaquerys en esta parte, ya que es la de por defecto solo se 
+escribe el css normal ya que si no sobreescribimos los estilos en las 
+secciones de mediaquerys mas adelante los estilos aqui escritos 
+estarian aplicando para todo tipo de pantallas*/
+
+/*Extra small devices (Phones 0px and up)*/
+body {
+	background-color: #D9D2F1;
+}
+
+/*Small devices (tablets, 768px and up) o version sm de bootstrap*/
+@media (min-width: 768px) {
+	/*Lo que se escriba aqui automaticamente se estara pasando para 
+	los siguientes @media querys salvo que lo volvamos a declarar en 
+	las otras mediaquerys*/
+	body {
+		background-color: #8DA9D4;
+	}
+}
+/*Medium devices (desktops, 992px and up) o version md de bootstrap*/
+@media (min-width: 992px) {
+	body {
+		background-color: #D4DAE3;
+	}
+}
+/*Large devices (large desktops, 1200px and up) o version ld de bootstrap*/
+@media (min-width: 1200px) {
+	body {
+		background-color: #ffffff;
+	}
+}

@@ -1,0 +1,43 @@
+@font-face {
+  font-family: 'Glyphicons Halflings';  
+  /*font-style, y font-weight no son necesario que se pongan pero si se le pone un valor diferente a normal
+  entonces ya no podran ser vistas las imagenes iconos de bootstrap*/ 
+  font-style: normal;
+  font-weight: normal;
+  src: local('Glyphicons Halflings'), url('../font/glyphicons-halflings-regular.ttf') format('truetype');
+}
+/*Los etilos de las imagenes se les da como si fueran texto*/
+.glyphicon-remove {
+  font-size:20px;
+  color: red;
+}
+.glyphicon-pencil {
+  font-size:20px;
+  color: #610B0B;
+}
+.glyphicon-folder-open {
+  font-size:20px;
+  color: #DBA901;
+}
+.glyphicon-file {
+  font-size:20px;
+  color: #7FB3D5;
+}
+
+.glyphicon-search {
+  font-size:80px;
+  color: #003300;
+  font-weight:bold;
+  background-color: #ECECF4;    
+}
+/*Para darle estilo a la imagen */
+/*.glyphicon-file {
+  color: #0099FF;
+  font-size:40px;   
+}*/
+.glyphicon-heart {
+  font-size: 90px;
+  font-style: italic;
+  text-decoration:line-through;
+  color:#FF0000;
+}
