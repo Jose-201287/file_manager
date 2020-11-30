@@ -1,3 +1,5 @@
+<?php include("funciones.php") ?>
+
 <!doctype html>
 <html lang="en">
   <head>
@@ -16,7 +18,31 @@
     <!-- Estilos individuales solo para este archivo-->
     <link href="css/inicio.css" rel="stylesheet" type="text/css"/>
     <link href="css/glyphicons.css" rel="stylesheet" type="text/css"/>
-    
+    <style type="text/css">
+      /*Para aplicar estilos a los cargados*/
+      .MultiFile-label {
+        margin: 5px 0;
+        padding: 0.3em;
+        border: 1px solid #FF6;
+        background-color: #FFC;
+        width: 98%;
+        font-weight: bold;
+      }
+      .MultiFile-remove {
+        float: right;
+      }    
+      a.MultiFile-remove  {
+        text-decoration: none;
+        color: #FFF;
+        background-color: #C00;
+        padding: 0 0.2em;
+      }
+      /*Para cambiar el boton de subir archivos por una imagen*/      
+      .image-upload .multi {
+        display: none;
+      }
+            
+    </style>
     
       
     
@@ -35,45 +61,90 @@
       <?php       
           
           $mysqli = new Mysqli("localhost", "root", "", "file_manager");
+
           if(!empty($_POST)) {
-            
+            $ejecutarSql = true;
             
             $json = json_decode($_POST['datos']);
             
             switch ($json->accion) {
               case 'createFolder':
-                $carpetaRaiz = ($json->id == null) ? 1 : 0;                
+                //$carpetaRaiz = ($json->id == null) ? 1 : 0;                
                 $sql = "
-                  INSERT INTO archivo(tipo, nombre, es_carpeta, es_carpeta_raiz)
-                  VALUES('carpeta', '".$_POST['nombreCarpeta']."', 1, ".$carpetaRaiz.")
+                  INSERT INTO archivo(tipo, nombre, es_carpeta, id_padre)
+                  VALUES('carpeta', '".$_POST['nombreCarpeta']."', 1, 0)
                 ";                
                 break;
+              case 'createSubFolder':
+                $sql = "
+                  INSERT INTO archivo(tipo, nombre, es_carpeta, id_padre)
+                  VALUES('carpeta', '".$_POST['nombreCarpeta']."', 1, ".$json->id.")
+                ";
+                break;
               case 'deleteFile': 
-                $sql = "DELETE FROM archivo WHERE id_archivo=".$json->id;
-                //echo "borrar id: " . $json->id; 
+                $sql = "
+                  SELECT 1 
+                  FROM archivo
+                  WHERE id_padre=".$json->id;
+                $result = $mysqli->query($sql) or die($mysqli->error . "_");
+                if($result->num_rows > 0) {
+                  $ejecutarSql = false;
+                  echo "                
+                    <div align='center'>
+                      <b style='color: red'>No se puede eliminar carpeta porque contiene archivos</b>
+                    </div>                
+                  ";
+                } else {
+                  $sql = "SELECT nombre, es_carpeta FROM archivo WHERE id_archivo=".$json->id;
+                  $result = $mysqli->query($sql) or die($mysqli->error . "_");
+                  if($result->num_rows > 0) {
+                    $row = $result->fetch_object();
+                    if($row->es_carpeta == 0)
+                      unlink("./uploads/".$row->nombre);                                          
+                    
+                  }
+                  $sql = "DELETE FROM archivo WHERE id_archivo=".$json->id;                
+                  
+                }
                 break;   
               case 'renameFile':
-
                 $sql = "
-                  UPDATE FROM archivo 
-                  SET nombre=".$_POST['nombre']."
-                  WHERE id =".$json->id;
+                  UPDATE archivo 
+                  SET nombre='".$_POST['nombreCarpeta']."'
+                  WHERE id_archivo =".$json->id;
+                break;
+              case 'addFile':
+                $_POST['nombreCarpeta'] = $_FILES['archivo']['name'][0];
+                $result = subeArchivo();
+                if($result == true) {
+                  $ejecutarSql = false;
+                  echo "                
+                    <div align='center'>
+                      <b style='color: red'>No se puedo subir el archivo ya que pesan mas de 5 megas</b>
+                    </div>                
+                  ";
+                }
+                $sql = "
+                  INSERT INTO archivo(tipo, nombre, es_carpeta, id_padre)
+                  VALUES('archivo', '".$_FILES['archivo']['name'][0]."', 0, ".$json->id.")
+                ";    
 
                 break;
-              default:  echo "error";  
-              
+              default:  exit("Error default");  
             } 
-            
-            $mysqli->query($sql);
+            if($ejecutarSql)
+              $mysqli->query($sql);
+
             if($mysqli->affected_rows == -1) {
               echo "                
                 <div align='center'>
-                  El nombre de la carpeta <b style='color: red'>".$_POST['nombreCarpeta']."</b> ya existe
+                  El nombre <b style='color: red'>".$_POST['nombreCarpeta']."</b> ya existe
                 </div>                
               ";
-            }
+            } 
             
-
+              
+                     
           }
 
           
@@ -94,49 +165,112 @@
                       </thead>
                       <tbody>
                         <?php 
+                          
+                          
                           $sql = "
                             SELECT 
-                              c.id_carpeta, c.nombre, arc_sub.id_archivo_subcarpeta, 
-                              arc_sub.sub_nombre, arc_sub.es_carpeta
-                            FROM carpeta c
-                            LEFT JOIN archivo_subcarpeta arc_sub ON c.id_carpeta=arc_sub.id_carpeta
-                            ORDER BY c.id_carpeta, arc_sub.id_carpeta, arc_sub.es_carpeta
-                          ";
-                          $sql = "
-                            SELECT *
+                              c.id_archivo as id_padre, c.nombre as nombre_padre,
+                                null as id_hijo, c.nombre as nombre_hijo, c.tipo, c.es_carpeta,
+                                c.id_archivo
+                            FROM archivo c
+                            WHERE c.id_padre=0
+                            UNION ALL
+                            SELECT 
+                              b.id_padre, a.nombre as nombre_padre, 
+                                b.id_archivo as id_hijo, b.nombre as nombre_hijo, b.tipo, b.es_carpeta,
+                                b.id_archivo
                             FROM archivo a
-                            LEFT JOIN enlace_carpeta_padre ecp ON a.id_archivo=ecp.id_padre
+                            JOIN (
+                              SELECT *
+                                FROM archivo
+                            ) b ON a.id_archivo=b.id_padre
+                            ORDER BY id_padre, id_archivo
                           ";
-                          //$sql="SELECT * FROM carpeta";
                           $result = $mysqli->query($sql) or die($mysqli->error . "_");
-                          echo "<form action='' method='POST' id='form_accion'>";
-                          while($row = $result->fetch_object()) {
-                            
-                            ?>
-                              <tr>
-                                <td>
-                                    <?php 
-                                    if($row->es_carpeta == 1) {
-                                      echo "<i class='glyphicon glyphicon-folder-open' style='padding-right: 20px'></i>";                                      
-                                      echo $row->nombre;  
-                                    } else {
-                                      echo "<i class='glyphicon glyphicon-file' style='padding-right: 20px'></i>";
-                                      echo $row->nombre;
-                                    } 
-                                    ?> 
-                                </td>
-                                <td>                                  
-                                  <a href='#' onclick='addFile(this.id);' id='<?php echo $row->id_archivo ?>' class='glyphicon glyphicon-file' style='padding: 5px'></a>
-                                  <a href='#' onclick='createFolder(this.id);' id='<?php echo $row->id_archivo ?>' class='glyphicon glyphicon-folder-open' style='padding: 5px'></a>
-                                  <a href='#' onclick='renameFile(this.id);' id='<?php echo $row->id_archivo ?>' class='glyphicon glyphicon-pencil' style='padding: 5px'></a>
-                                  <a href='#' onclick='deleteFile(this.id);' id='<?php echo $row->id_archivo ?>' class='glyphicon glyphicon-remove' style='padding: 5px'></a>
+                          $sangria = 0;
+                          $id_padreAnt = "";
+                          $tabla = array();
+                          $i = 0;
 
+                          while($row = $result->fetch_object()) {
+                            if($i != 0) {
+                              $posEncontrado = array_search($row->id_padre, array_column($tabla, 'id_hijo'));     
+                              if($row->id_padre != $row->id_hijo && $posEncontrado != "") {
+                                
+                                //Encontro su registro padre
+                                array_splice($tabla, $posEncontrado+1, 0, 
+                                  array(array(
+                                    "id_padre" => $row->id_padre,
+                                    "nombre_padre" => $row->nombre_padre,
+                                    "id_hijo" => $row->id_hijo,
+                                    "nombre_hijo" => $row->nombre_hijo,
+                                    "tipo" => $row->tipo,
+                                    "es_carpeta" => $row->es_carpeta,
+                                    "id_archivo" => $row->id_archivo,
+                                    "sangria" => $tabla[$posEncontrado]["sangria"] + 1
+                                  ))
+                                );
+                              } else {
+                                $sangria = ($id_padreAnt != $row->id_padre) ? 0: 1;         
+                                $tabla[] = array(
+                                  "id_padre" => $row->id_padre,
+                                  "nombre_padre" => $row->nombre_padre,
+                                  "id_hijo" => $row->id_hijo,
+                                  "nombre_hijo" => $row->nombre_hijo,
+                                  "tipo" => $row->tipo,
+                                  "es_carpeta" => $row->es_carpeta,
+                                  "id_archivo" => $row->id_archivo,
+                                  "sangria" => $sangria
+                                );
+                              }
+
+                            } else {
+                              //Entra solo la primera vez
+                              $tabla[] = array(
+                                "id_padre" => $row->id_padre,
+                                "nombre_padre" => $row->nombre_padre,
+                                "id_hijo" => $row->id_hijo,
+                                "nombre_hijo" => $row->nombre_hijo,
+                                "tipo" => $row->tipo,
+                                "es_carpeta" => $row->es_carpeta,
+                                "id_archivo" => $row->id_archivo,
+                                "sangria" => $sangria       
+                              );
+                            }   
+                            $id_padreAnt = $row->id_padre;  
+                            $i++;  
+                          } //Fin while
+                          $mysqli->close();
+
+                          echo "<form action='' method='POST' id='form_accion'>";
+                          foreach($tabla as $key => $array) {
+                            ?>     
+                              <tr>
+                                <td> 
+                                  <?php  
+                                  if($array['es_carpeta'] == 1) {                   
+                                    echo "<i class='glyphicon glyphicon-folder-open' style='padding-right: 10px; margin-left:".(($array['sangria'])*30)."px'></i>";
+                                    echo $array['nombre_hijo'];
+                                  } else {
+                                    echo "<i class='glyphicon glyphicon-file' style='padding-right: 10px; margin-left:".(($array['sangria'])*30)."px'></i>";
+                                    echo $array['nombre_hijo'];
+                                  } 
+                                  ?>
+                                </td>
+                                <td>                             
+                                  <?php
+                                  if($array['es_carpeta'] == 1) { ?>
+                                    <a href='#' onclick='addFile(this.id);' id='<?php echo $array["id_archivo"] ?>' class='glyphicon glyphicon-file' style='padding: 5px'></a>
+                                    <a href='#' onclick='createSubFolder(this.id);' id='<?php echo $array["id_archivo"] ?>' class='glyphicon glyphicon-folder-open' style='padding: 5px'></a>
+                                    <?php
+                                  }  ?>
+                                  <a href='#' onclick='renameFile(this.id);' id='<?php echo $array["id_archivo"] ?>' class='glyphicon glyphicon-pencil' style='padding: 5px'></a>
+                                  <a href='#' onclick='deleteFile(this.id);' id='<?php echo $array["id_archivo"] ?>' class='glyphicon glyphicon-remove' style='padding: 5px'></a>
+                                  
                                 </td>                          
                               </tr>
                             <?php
-
-                          } //Fin while
-                          $mysqli->close();
+                          } //fin del foreach
                         ?>
                         <input type="hidden" name="datos" class="datos" id="datos" value="">
                         </form>
@@ -150,8 +284,6 @@
             </div>  
             <?php
           } 
-          
-          //$mysqli->close();
       ?>
       
       
@@ -165,35 +297,64 @@
         <button type="button" class="close" data-dismiss="modal">
           <span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>          
           <h5 class="modal-title" id="myModalLabel">
-            <b>Crear carpeta</b>
+            <b id="titulo">Crear carpeta</b>
           </h5>
       </div>
       <div class="modal-body">
-        <form action="" method="POST" id="formulario">
+        <form action="" method="POST" id="form_modal">
           <div class="form-group">
-            <label for="recipient-name" class="col-form-label">Nombre:</label>
+            <label for="recipient-name" id="texto" class="col-form-label">Nombre:</label>
             <input type="text" class="form-control" id="recipient-name" name="nombreCarpeta">
           </div>                
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-secondary" data-dismiss="modal" id="btnClose">Closer</button>
         <button type="submit" class="btn btn-success" id="crear">Crear</button> 
-        <input type="hidden" name="datos" class="datos" value="">
+        <input type="hidden" name="datos" class="datos" id="datos" value="">
         </form>
       </div>
     </div>
   </div>
   </div>
   <!-- Fin Modal -->
+  <!-- Modal upload files-->
+  <form action="" id="formUploadFiles" method="post" enctype="multipart/form-data">
+  <div class="modal fade" id="uploadFiles" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal">
+            <span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>          
+            <h5 class="modal-title" id="myModalLabel">
+              <b id="titulo">Cargar Archivos</b>
+            </h5>
+        </div>
+        <div class="modal-body image-upload">
+          Click para subir archivo (max 5 Megas):
+          <label for="file-input">
+              <img src="lib/img/icon-alerts/b_image.png"/>
+          </label>  
+          <input type="file" id="file-input" class="multi" name="archivo[]" />
+          <input type="hidden" name="datos" class="datos" id="datos" value="">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+          <button type="submit" class="btn btn-primary">Cargar</button>
+        </div>
+      </div>
+    </div>
+  </div>
   
-  
+  </form>
+  <!-- Fin Modal -->
 
   <script src="js/jquery-1.11.1.min.js" type="text/javascript"></script>
   <script src="lib/js/jquery-1.8.2.min.js"></script>  
   <script src="lib/js/jquery.alerts.mod.js" type="text/javascript"></script>
   <script src="js/bootstrap.min.js" type="text/javascript"></script>
+  <script src='lib/js/jquery.MultiFile.js' type="text/javascript" language="javascript"></script>
   <script src="js/inicio.js" type="text/javascript"></script>
-  <script src="js/functions.js" type="text/javascript"></script>
+  
 
 
   </body>
